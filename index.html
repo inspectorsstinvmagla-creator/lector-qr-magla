@@ -219,15 +219,17 @@
       codigoLeido.textContent = texto;
       resultado.style.display = "block";
 
-      if (window.opener && !window.opener.closed) {
-        try {
-          window.opener.postMessage(
-            {
-              type: "MAGLA_QR_SCAN",
-              code: texto,
-              timestamp: Date.now()
-            },
-            "*"
+     if (window.opener && !window.opener.closed) {
+  window.opener.postMessage({
+    type: "MAGLA_QR_SCAN",
+    code: text,
+    timestamp: Date.now()
+  }, "*");
+
+  setTimeout(() => {
+    window.close();
+  }, 300);
+}
           );
 
           tituloResultado.textContent =
