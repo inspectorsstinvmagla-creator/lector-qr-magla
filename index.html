@@ -1,0 +1,249 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lector QR - Control de acceso</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+    }
+
+    main {
+      max-width: 500px;
+      margin: 20px auto;
+      padding: 22px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 18px #00000012;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+      text-align: center;
+    }
+
+    p {
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    #lectorQR {
+      width: 100%;
+      margin: 20px auto;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 10px;
+      border: 0;
+      border-radius: 9px;
+      background: #166534;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    #detener {
+      background: #b91c1c;
+    }
+
+    #estado {
+      padding: 12px;
+      background: #f1f5f9;
+      border-radius: 8px;
+      overflow-wrap: anywhere;
+    }
+
+    #resultado {
+      display: none;
+      padding: 14px;
+      margin-top: 15px;
+      background: #dcfce7;
+      border-radius: 8px;
+      overflow-wrap: anywhere;
+    }
+
+    #codigoLeido {
+      font-size: 20px;
+      font-weight: bold;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>📷 Lector QR</h1>
+
+    <p>
+      Prueba de cámara para el sistema de control de acceso
+      de las obras.
+    </p>
+
+    <div id="estado">Preparado para iniciar la cámara.</div>
+
+    <div id="lectorQR"></div>
+
+    <button id="iniciar" onclick="iniciarCamara()">
+      Activar cámara
+    </button>
+
+    <button id="detener" onclick="detenerCamara()" disabled>
+      Detener cámara
+    </button>
+
+    <div id="resultado">
+      <p>Código QR detectado:</p>
+      <div id="codigoLeido"></div>
+      <button onclick="copiarCodigo()">Copiar código</button>
+      <button onclick="leerOtro()">Leer otro código</button>
+    </div>
+  </main>
+
+  <script>
+    let lector = null;
+    let camaraActiva = false;
+    let codigoDetectado = false;
+
+    const estado = document.getElementById("estado");
+    const botonIniciar = document.getElementById("iniciar");
+    const botonDetener = document.getElementById("detener");
+    const resultado = document.getElementById("resultado");
+    const codigoLeido = document.getElementById("codigoLeido");
+
+    async function iniciarCamara() {
+      if (camaraActiva) return;
+
+      if (!window.isSecureContext) {
+        estado.textContent =
+          "Error: abre la página publicada mediante HTTPS.";
+        return;
+      }
+
+      if (!navigator.mediaDevices ||
+          !navigator.mediaDevices.getUserMedia) {
+        estado.textContent =
+          "Este navegador no permite acceder a la cámara.";
+        return;
+      }
+
+      if (!window.Html5Qrcode) {
+        estado.textContent =
+          "No cargó el lector QR. Comprueba tu conexión a internet y recarga la página.";
+        return;
+      }
+
+      botonIniciar.disabled = true;
+      estado.textContent = "Solicitando acceso a la cámara...";
+
+      try {
+        lector = new Html5Qrcode("lectorQR");
+
+        await lector.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 230, height: 230 },
+            aspectRatio: 1
+          },
+          (texto) => {
+            if (codigoDetectado) return;
+
+            codigoDetectado = true;
+            codigoLeido.textContent = texto;
+            resultado.style.display = "block";
+            estado.textContent = "¡Código QR leído correctamente!";
+          },
+          () => {}
+        );
+
+        camaraActiva = true;
+        botonDetener.disabled = false;
+        estado.textContent =
+          "Cámara activa. Enfoca un código QR.";
+      } catch (error) {
+        estado.textContent =
+          "No se pudo abrir la cámara. Error: " +
+          (error.name || "Desconocido") +
+          ". " + (error.message || "");
+
+        if (lector) {
+          try {
+            await lector.clear();
+          } catch (e) {}
+        }
+
+        lector = null;
+        camaraActiva = false;
+        botonDetener.disabled = true;
+      } finally {
+        botonIniciar.disabled = false;
+      }
+    }
+
+    async function detenerCamara() {
+      if (lector && camaraActiva) {
+        try {
+          await lector.stop();
+          await lector.clear();
+          estado.textContent = "Cámara detenida.";
+        } catch (error) {
+          estado.textContent =
+            "La cámara no se pudo detener correctamente.";
+        }
+      }
+
+      lector = null;
+      camaraActiva = false;
+      botonIniciar.disabled = false;
+      botonDetener.disabled = true;
+    }
+
+    async function copiarCodigo() {
+      const texto = codigoLeido.textContent;
+
+      try {
+        await navigator.clipboard.writeText(texto);
+        estado.textContent = "Código copiado correctamente.";
+      } catch (error) {
+        estado.textContent =
+          "No se pudo copiar automáticamente. Selecciona el código y cópialo manualmente.";
+      }
+    }
+
+    function leerOtro() {
+      codigoDetectado = false;
+      resultado.style.display = "none";
+      codigoLeido.textContent = "";
+      estado.textContent =
+        camaraActiva
+          ? "Cámara activa. Enfoca otro código QR."
+          : "Pulsa Activar cámara para comenzar.";
+    }
+  </script>
+</body>
+</html>
