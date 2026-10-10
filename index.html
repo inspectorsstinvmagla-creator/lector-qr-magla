@@ -266,66 +266,68 @@
       }
 
       async function procesarCodigoLeido(texto) {
-        if (codigoDetectado || procesando) return;
+  if (codigoDetectado || procesando) return;
 
-        codigoDetectado = true;
-        procesando = true;
+  codigoDetectado = true;
+  procesando = true;
 
-        codigoLeido.textContent = texto;
-        resultado.style.display = "block";
-        tituloResultado.textContent = "Código QR detectado:";
-        estado.textContent = "Código leído. Deteniendo la cámara...";
+  codigoLeido.textContent = texto;
+  resultado.style.display = "block";
+  tituloResultado.textContent = "Código QR detectado:";
+  estado.textContent = "Código leído. Deteniendo cámara...";
 
-        if (lector && camaraActiva) {
-          try {
-            await lector.stop();
-          } catch (error) {
-            console.warn("No se pudo detener la cámara:", error);
-          }
-        }
-
-        camaraActiva = false;
-        botonDetener.disabled = true;
-
-        try {
-          if (window.opener && !window.opener.closed) {
-            window.opener.postMessage({
-              type: "MAGLA_QR_SCAN",
-              code: texto,
-              timestamp: Date.now()
-            }, "*");
-
-            tituloResultado.textContent =
-              "Código leído y enviado a la aplicación:";
-
-            estado.textContent =
-              "Código enviado. Regresando a la aplicación...";
-
-            // El mensaje se envía antes de cerrar esta ventana.
-            setTimeout(() => {
-              window.close();
-
-              // Si el navegador impide cerrar la ventana,
-              // el código sigue visible para copiarlo.
-              estado.textContent =
-                "Si esta ventana no se cerró automáticamente, " +
-                "vuelve a la aplicación principal.";
-              procesando = false;
-            }, 700);
-          } else {
-            tituloResultado.textContent = "Código QR detectado:";
-            estado.textContent =
-              "No se encontró la ventana principal. " +
-              "Puedes copiar el código o leer otro.";
-            procesando = false;
-          }
-        } catch (error) {
-          tituloResultado.textContent = "Código QR detectado:";
-          estado.textContent =
-            "No se pudo enviar el código. Puedes copiarlo manualmente.";
-          procesando = false;
-        }
+  try {
+    // Detener la cámara antes de enviar el código.
+    if (lector && camaraActiva) {
+      try {
+        await lector.stop();
+      } catch (error) {
+        console.warn("No se pudo detener la cámara:", error);
       }
+    }
+
+    camaraActiva = false;
+    botonDetener.disabled = true;
+
+    // Enviar el código a la aplicación principal.
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({
+        type: "MAGLA_QR_SCAN",
+        code: texto,
+        timestamp: Date.now()
+      }, "*");
+
+      tituloResultado.textContent = "Código enviado a MAGLA";
+      estado.textContent = "Regresando a la aplicación...";
+
+      // Dar tiempo para que la aplicación reciba el mensaje.
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      window.close();
+
+      // Chrome puede impedir el cierre automático.
+      setTimeout(() => {
+        if (!window.closed) {
+          estado.textContent =
+            "Chrome no permitió cerrar esta ventana. " +
+            "Vuelve a la aplicación MAGLA.";
+        }
+      }, 500);
+
+    } else {
+      tituloResultado.textContent = "Código QR detectado";
+      estado.textContent =
+        "No se detectó una ventana principal abierta por el lector. " +
+        "El código quedó visible en pantalla.";
+    }
+  } catch (error) {
+    console.error("Error al procesar el QR:", error);
+    estado.textContent =
+      "Se leyó el código, pero ocurrió un error al enviarlo.";
+  } finally {
+    procesando = false;
+  }
+}
 
       async function detenerCamara() {
         botonDetener.disabled = true;
