@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -102,7 +103,6 @@
     </p>
 
     <div id="estado">Preparado para iniciar la cámara.</div>
-
     <div id="lectorQR"></div>
 
     <button id="iniciar" onclick="iniciarCamara()">
@@ -178,7 +178,6 @@
           },
           (texto) => {
             if (codigoDetectado) return;
-
             procesarCodigoLeido(texto);
           },
           () => {}
@@ -193,9 +192,9 @@
         }
       } catch (error) {
         estado.textContent =
-          "No se pudo abrir la cámara. Error: " +
-          (error.name || "Desconocido") +
-          ". " + (error.message || "");
+          "No se pudo abrir la cámara. " +
+          (error.name || "Error") +
+          ": " + (error.message || "Comprueba los permisos de cámara.");
 
         if (lector) {
           try {
@@ -211,45 +210,58 @@
       }
     }
 
-    function procesarCodigoLeido(texto) {
+    async function procesarCodigoLeido(texto) {
       if (codigoDetectado) return;
 
       codigoDetectado = true;
 
       codigoLeido.textContent = texto;
       resultado.style.display = "block";
+      tituloResultado.textContent = "Código QR detectado:";
 
-     if (window.opener && !window.opener.closed) {
-  window.opener.postMessage({
-    type: "MAGLA_QR_SCAN",
-    code: text,
-    timestamp: Date.now()
-  }, "*");
+      estado.textContent = "Código leído. Preparando el envío...";
 
-  setTimeout(() => {
-    window.close();
-  }, 300);
-}
-          );
+      // Detener la cámara antes de regresar a la aplicación.
+      if (lector && camaraActiva) {
+        try {
+          await lector.stop();
+        } catch (error) {
+          // Continuar con el envío aunque la cámara no se detenga.
+        }
+      }
+
+      camaraActiva = false;
+      botonDetener.disabled = true;
+
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({
+            type: "MAGLA_QR_SCAN",
+            code: texto,
+            timestamp: Date.now()
+          }, "*");
 
           tituloResultado.textContent =
             "Código leído y enviado a la aplicación:";
 
           estado.textContent =
-            "Código enviado a la aplicación. Espera la respuesta en la ventana principal.";
-        } catch (error) {
-          tituloResultado.textContent =
-            "Código QR detectado:";
+            "Código enviado. Regresando a la aplicación...";
 
+          // Dar tiempo para que la ventana principal reciba el mensaje.
+          setTimeout(() => {
+            window.close();
+          }, 700);
+
+        } catch (error) {
           estado.textContent =
-            "Se leyó el código, pero no se pudo enviar a la aplicación. Puedes copiarlo manualmente.";
+            "No se pudo enviar el código. Puedes copiarlo manualmente.";
         }
       } else {
-        tituloResultado.textContent =
-          "Código QR detectado:";
+        tituloResultado.textContent = "Código QR detectado:";
 
         estado.textContent =
-          "Código leído. No se detectó una aplicación abierta para recibirlo.";
+          "No se detectó una ventana principal abierta. " +
+          "Puedes copiar el código o leer otro.";
       }
     }
 
@@ -257,12 +269,15 @@
       if (lector && camaraActiva) {
         try {
           await lector.stop();
-          await lector.clear();
           estado.textContent = "Cámara detenida.";
         } catch (error) {
           estado.textContent =
             "La cámara no se pudo detener correctamente.";
         }
+
+        try {
+          await lector.clear();
+        } catch (error) {}
       }
 
       lector = null;
