@@ -1,17 +1,14 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lector QR - Control de acceso</title>
+  <title>Lector QR - Control de acceso Magla</title>
 
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -66,9 +63,8 @@
       cursor: wait;
     }
 
-    #detener {
-      background: #b91c1c;
-    }
+    #detener { background: #b91c1c; }
+    #copiar { background: #475569; }
 
     #estado {
       padding: 12px;
@@ -87,10 +83,11 @@
     }
 
     #codigoLeido {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: bold;
       text-align: center;
       overflow-wrap: anywhere;
+      word-break: break-word;
     }
   </style>
 </head>
@@ -100,7 +97,7 @@
     <h1>📷 Lector QR</h1>
 
     <p>
-      Prueba de cámara para el sistema de control de acceso
+      Lector de códigos QR para el control de acceso
       de las obras.
     </p>
 
@@ -117,10 +114,16 @@
     </button>
 
     <div id="resultado">
-      <p>Código QR detectado:</p>
+      <p id="tituloResultado">Código QR detectado:</p>
       <div id="codigoLeido"></div>
-      <button onclick="copiarCodigo()">Copiar código</button>
-      <button onclick="leerOtro()">Leer otro código</button>
+
+      <button id="copiar" onclick="copiarCodigo()">
+        Copiar código
+      </button>
+
+      <button onclick="leerOtro()">
+        Leer otro código
+      </button>
     </div>
   </main>
 
@@ -134,6 +137,7 @@
     const botonDetener = document.getElementById("detener");
     const resultado = document.getElementById("resultado");
     const codigoLeido = document.getElementById("codigoLeido");
+    const tituloResultado = document.getElementById("tituloResultado");
 
     async function iniciarCamara() {
       if (camaraActiva) return;
@@ -144,8 +148,10 @@
         return;
       }
 
-      if (!navigator.mediaDevices ||
-          !navigator.mediaDevices.getUserMedia) {
+      if (
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia
+      ) {
         estado.textContent =
           "Este navegador no permite acceder a la cámara.";
         return;
@@ -153,7 +159,7 @@
 
       if (!window.Html5Qrcode) {
         estado.textContent =
-          "No cargó el lector QR. Comprueba tu conexión a internet y recarga la página.";
+          "No cargó el lector QR. Comprueba tu conexión y recarga la página.";
         return;
       }
 
@@ -173,18 +179,18 @@
           (texto) => {
             if (codigoDetectado) return;
 
-            codigoDetectado = true;
-            codigoLeido.textContent = texto;
-            resultado.style.display = "block";
-            estado.textContent = "¡Código QR leído correctamente!";
+            procesarCodigoLeido(texto);
           },
           () => {}
         );
 
         camaraActiva = true;
         botonDetener.disabled = false;
-        estado.textContent =
-          "Cámara activa. Enfoca un código QR.";
+
+        if (!codigoDetectado) {
+          estado.textContent =
+            "Cámara activa. Enfoca un código QR.";
+        }
       } catch (error) {
         estado.textContent =
           "No se pudo abrir la cámara. Error: " +
@@ -202,6 +208,46 @@
         botonDetener.disabled = true;
       } finally {
         botonIniciar.disabled = false;
+      }
+    }
+
+    function procesarCodigoLeido(texto) {
+      if (codigoDetectado) return;
+
+      codigoDetectado = true;
+
+      codigoLeido.textContent = texto;
+      resultado.style.display = "block";
+
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage(
+            {
+              type: "MAGLA_QR_SCAN",
+              code: texto,
+              timestamp: Date.now()
+            },
+            "*"
+          );
+
+          tituloResultado.textContent =
+            "Código leído y enviado a la aplicación:";
+
+          estado.textContent =
+            "Código enviado a la aplicación. Espera la respuesta en la ventana principal.";
+        } catch (error) {
+          tituloResultado.textContent =
+            "Código QR detectado:";
+
+          estado.textContent =
+            "Se leyó el código, pero no se pudo enviar a la aplicación. Puedes copiarlo manualmente.";
+        }
+      } else {
+        tituloResultado.textContent =
+          "Código QR detectado:";
+
+        estado.textContent =
+          "Código leído. No se detectó una aplicación abierta para recibirlo.";
       }
     }
 
@@ -239,11 +285,18 @@
       codigoDetectado = false;
       resultado.style.display = "none";
       codigoLeido.textContent = "";
-      estado.textContent =
-        camaraActiva
-          ? "Cámara activa. Enfoca otro código QR."
-          : "Pulsa Activar cámara para comenzar.";
+      tituloResultado.textContent = "Código QR detectado:";
+
+      estado.textContent = camaraActiva
+        ? "Cámara activa. Enfoca otro código QR."
+        : "Pulsa Activar cámara para comenzar.";
     }
+
+    window.addEventListener("beforeunload", () => {
+      if (lector && camaraActiva) {
+        lector.stop().catch(() => {});
+      }
+    });
   </script>
 </body>
 </html>
